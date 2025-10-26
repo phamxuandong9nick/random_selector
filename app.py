@@ -8,6 +8,7 @@ import time
 import json 
 from pathlib import Path
 from datetime import datetime 
+import hashlib # --- THÊM: Thư viện để băm ---
 
 class LuckyDrawApp:
     def __init__(self, root):
@@ -158,8 +159,8 @@ class LuckyDrawApp:
         
         self.scroll_winners = ttk.Scrollbar(scroll_frame_winners, orient=tk.VERTICAL)
 
-        # --- THAY ĐỔI: Cột 'Prize' (Giải thưởng) đổi tên key thành 'Group' (Nhóm) ---
-        cols_winners = (self.lang('tree_col_id'), self.lang('tree_col_name'), self.lang('tree_col_prize'))
+        # --- THAY ĐỔI: Thêm cột STT vào DS Đã Chọn ---
+        cols_winners = (self.lang('tree_col_stt'), self.lang('tree_col_id'), self.lang('tree_col_name'), self.lang('tree_col_prize'))
         
         self.tree_winners = ttk.Treeview(scroll_frame_winners, columns=cols_winners, show='headings', yscrollcommand=self.scroll_winners.set)
         
@@ -168,10 +169,11 @@ class LuckyDrawApp:
         
         for col in cols_winners:
             self.tree_winners.heading(col, text=col)
-        # --- THAY ĐỔI: Cấu hình độ rộng 3 cột ---
-        self.tree_winners.column(cols_winners[0], width=120)
+        # --- THAY ĐỔI: Cấu hình độ rộng 4 cột (thêm STT) ---
+        self.tree_winners.column(cols_winners[0], width=50, minwidth=40, stretch=tk.NO) # Cột STT
         self.tree_winners.column(cols_winners[1], width=120)
-        self.tree_winners.column(cols_winners[2], width=110)
+        self.tree_winners.column(cols_winners[2], width=120)
+        self.tree_winners.column(cols_winners[3], width=110)
         # --- KẾT THÚC THAY ĐỔI ---
             
         self.tree_winners.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -224,6 +226,7 @@ class LuckyDrawApp:
         Trả về nội dung config JSON mặc định (ĐÃ CẬP NHẬT TÊN GỌI)
         Hàm này cũng tự động thêm các key mới (STT, Count)
         """
+        # --- THAY ĐỔI: Thêm key 'export_hash_label' ---
         return {
           "en": {
             "app_title": "Random Selector Software",
@@ -279,7 +282,8 @@ class LuckyDrawApp:
             "prize_name_empty_warn": "Please enter a group name to proceed.",
             "tree_col_stt": "No.",
             "label_waiting_list_count": "Waiting List (Total: {count})",
-            "label_winners_list_count": "Selected List (Total: {count})"
+            "label_winners_list_count": "Selected List (Total: {count})",
+            "export_hash_label": "Data Integrity Check (SHA256):"
           },
           "vi": {
             "app_title": "Phần mềm Sắp xếp Ngẫu nhiên",
@@ -335,7 +339,8 @@ class LuckyDrawApp:
             "prize_name_empty_warn": "Vui lòng nhập tên nhóm để tiếp tục.",
             "tree_col_stt": "STT",
             "label_waiting_list_count": "Danh sách Chờ (Tổng: {count})",
-            "label_winners_list_count": "Danh sách Đã chọn (Tổng: {count})"
+            "label_winners_list_count": "Danh sách Đã chọn (Tổng: {count})",
+            "export_hash_label": "Mã Kiểm tra Toàn vẹn (SHA256):"
           },
           "zh-CN": {
             "app_title": "随机选择软件",
@@ -391,7 +396,8 @@ class LuckyDrawApp:
             "prize_name_empty_warn": "请输入分组名称以继续。",
             "tree_col_stt": "序号",
             "label_waiting_list_count": "等待列表 (总数: {count})",
-            "label_winners_list_count": "已选名单 (总数: {count})"
+            "label_winners_list_count": "已选名单 (总数: {count})",
+            "export_hash_label": "数据完整性校验 (SHA256):"
           },
           "zh-TW": {
             "app_title": "隨機選擇軟體",
@@ -447,9 +453,11 @@ class LuckyDrawApp:
             "prize_name_empty_warn": "請輸入分組名稱以繼續。",
             "tree_col_stt": "序號",
             "label_waiting_list_count": "等待列表 (總數: {count})",
-            "label_winners_list_count": "已選名單 (總數: {count})"
+            "label_winners_list_count": "已選名單 (總數: {count})",
+            "export_hash_label": "資料完整性校驗 (SHA256):"
           }
         }
+        # --- KẾT THÚC THAY ĐỔI ---
 
     def load_config(self):
         """Tải file languages.json, hoặc tạo file mặc định nếu không tồn tại."""
@@ -530,7 +538,7 @@ class LuckyDrawApp:
         self.btn_clear_db.config(text=self.lang("btn_clear_db"))
         self.label_prize_name.config(text=self.lang("label_prize_name"))
 
-        # --- THAY ĐỔI: Cập nhật cột Treeview (Thêm STT cho DS Chờ) ---
+        # --- THAY ĐỔI: Cập nhật cột Treeview (Đã tách biệt 2 cây) ---
         # Cây danh sách chờ (3 cột)
         cols_available = (self.lang('tree_col_stt'), self.lang('tree_col_id'), self.lang('tree_col_name'))
         self.tree_available.config(columns=cols_available)
@@ -541,20 +549,23 @@ class LuckyDrawApp:
         self.tree_available.column(cols_available[1], width=120)
         self.tree_available.column(cols_available[2], width=180)
 
-        # Cây danh sách đã chọn (3 cột)
-        cols_winners = (self.lang('tree_col_id'), self.lang('tree_col_name'), self.lang('tree_col_prize'))
+        # --- THAY ĐỔI: Cây danh sách đã chọn (4 cột) ---
+        cols_winners = (self.lang('tree_col_stt'), self.lang('tree_col_id'), self.lang('tree_col_name'), self.lang('tree_col_prize'))
         self.tree_winners.config(columns=cols_winners)
         self.tree_winners.heading(cols_winners[0], text=cols_winners[0])
         self.tree_winners.heading(cols_winners[1], text=cols_winners[1])
         self.tree_winners.heading(cols_winners[2], text=cols_winners[2])
-        self.tree_winners.column(cols_winners[0], width=120)
+        self.tree_winners.heading(cols_winners[3], text=cols_winners[3])
+        self.tree_winners.column(cols_winners[0], width=50, minwidth=40, stretch=tk.NO) # Cột STT
         self.tree_winners.column(cols_winners[1], width=120)
-        self.tree_winners.column(cols_winners[2], width=110)
+        self.tree_winners.column(cols_winners[2], width=120)
+        self.tree_winners.column(cols_winners[3], width=110)
         # --- KẾT THÚC THAY ĐỔI ---
 
-        # --- THAY ĐỔI: Tải lại dữ liệu (có STT cho DS Chờ) ---
+        # --- THAY ĐỔI: Tải lại dữ liệu (có STT cho cả 2 DS) ---
         self.populate_tree(self.tree_available, self.available_employees, add_stt=True)
-        self.populate_tree(self.tree_winners, self.winners, add_stt=False)
+        # --- THAY ĐỔI: Thêm cờ (flag) reset_stt_on_group_change=True ---
+        self.populate_tree(self.tree_winners, self.winners, add_stt=True, reset_stt_on_group_change=True)
         # --- KẾT THÚC THAY ĐỔI ---
 
     # --- KẾT THÚC CÁC HÀM ĐA NGÔN NGỮ ---
@@ -642,25 +653,46 @@ class LuckyDrawApp:
             self.label_winners.config(text=self.lang("label_winners_list_count", count=len(self.winners)))
             # --- KẾT THÚC THAY ĐỔI ---
 
-            # --- THAY ĐỔI: Gọi populate_tree với add_stt=True cho DS Chờ ---
+            # --- THAY ĐỔI: Gọi populate_tree với add_stt=True cho cả 2 DS ---
             self.populate_tree(self.tree_available, self.available_employees, add_stt=True)
-            self.populate_tree(self.tree_winners, self.winners, add_stt=False)
+            # --- THAY ĐỔI: Thêm cờ (flag) reset_stt_on_group_change=True ---
+            self.populate_tree(self.tree_winners, self.winners, add_stt=True, reset_stt_on_group_change=True)
             # --- KẾT THÚC THAY ĐỔI ---
             
         except sqlite3.Error as e:
             messagebox.showerror(self.lang("error_title"), self.lang("db_error_load", error=e))
 
-    def populate_tree(self, tree, data, add_stt=False):
+    # --- THAY ĐỔI: Thêm tham số reset_stt_on_group_change ---
+    def populate_tree(self, tree, data, add_stt=False, reset_stt_on_group_change=False):
         """Hiển thị dữ liệu lên một Treeview, có tùy chọn thêm STT"""
         for i in tree.get_children():
             tree.delete(i)
         
-        if add_stt:
+        if not add_stt:
+            for item in data:
+                tree.insert('', 'end', values=item)
+            return
+
+        # Logic for add_stt=True
+        if not reset_stt_on_group_change:
+            # Logic cũ: STT liên tục (dùng cho DS Chờ)
             for index, item in enumerate(data, 1):
                 tree.insert('', 'end', values=(index,) + item)
         else:
+            # Logic mới: Reset STT khi 'group_name' thay đổi (dùng cho DS Đã chọn)
+            # 'data' cho winners là: (id, name, group_name)
+            # Cột 'group_name' là item[2]
+            current_group = None
+            group_stt = 1
             for item in data:
-                tree.insert('', 'end', values=item)
+                # item[2] là group_name
+                if item[2] != current_group:
+                    current_group = item[2]
+                    group_stt = 1 # Reset STT
+                
+                tree.insert('', 'end', values=(group_stt,) + item)
+                group_stt += 1
+    # --- KẾT THÚC THAY ĐỔI ---
 
 
     def shuffle_available_list(self):
@@ -773,7 +805,7 @@ class LuckyDrawApp:
             messagebox.showerror(self.lang("error_title"), self.lang("db_error_clear", error=e))
 
     def export_list(self, data, filename_prefix_key):
-        """Hàm chung để xuất một danh sách (data) ra file Excel, có thêm STT"""
+        """Hàm chung để xuất một danh sách (data) ra file Excel, có thêm STT và Mã hash"""
         if not data:
             messagebox.showwarning(self.lang("warning_title"), self.lang("empty_export_warn"))
             return
@@ -796,13 +828,13 @@ class LuckyDrawApp:
             sheet = workbook.active
             sheet.title = self.lang("export_sheet_name") 
             
-            # --- THAY ĐỔI: Cập nhật tiêu đề cột động (dùng key 'group' thay vì 'prize') ---
+            # --- THAY ĐỔI: Logic tiêu đề giữ nguyên (đã cập nhật ở lần trước) ---
             if data and len(data[0]) == 3: # Đây là danh sách đã chọn (ID, Name, Group)
                 sheet.append([
                     self.lang("export_header_stt"), 
                     self.lang("export_header_id"), 
                     self.lang("export_header_name"),
-                    self.lang("export_header_prize") # Key này giờ trỏ đến "Group"
+                    self.lang("export_header_prize") 
                 ])
             else: # Đây là danh sách chờ (ID, Name)
                 sheet.append([
@@ -812,20 +844,41 @@ class LuckyDrawApp:
                 ])
             # --- KẾT THÚC THAY ĐỔI ---
             
-            # Dữ liệu của DS Chờ (self.available_employees) chỉ có (ID, Name)
-            # Dữ liệu của DS Đã chọn (self.winners) có (ID, Name, Group)
-            # Dữ liệu được truyền vào 'data' đã có STT (do populate_tree)
+            # --- THAY ĐỔI: Logic STT động khi xuất file (để reset STT theo nhóm) ---
+            data_string_for_hash = ""
             
-            # Hàm populate_tree đã thêm STT vào data cho DS Chờ
-            # nhưng hàm export_list này lại thêm STT lần nữa
-            # Cần sửa logic: DS Chờ không có STT trong 'data'
+            if filename_prefix_key == "export_prefix_winners":
+                # Logic mới: Reset STT khi 'group_name' thay đổi (dùng cho DS Đã chọn)
+                # 'data' (row) là: (id, name, group_name)
+                # Cột 'group_name' là row[2]
+                current_group = None
+                group_stt = 1
+                for row in data:
+                    if row[2] != current_group:
+                        current_group = row[2]
+                        group_stt = 1 # Reset STT
+                    
+                    row_to_write = (group_stt,) + row # (STT, ID, Name, Group)
+                    sheet.append(row_to_write)
+                    data_string_for_hash += "".join(map(str, row_to_write))
+                    group_stt += 1
+            else:
+                # Logic cũ: STT liên tục (dùng cho DS Chờ)
+                for index, row in enumerate(data, 1):
+                    # row là (ID, Name)
+                    row_to_write = (index,) + row # (STT, ID, Name)
+                    sheet.append(row_to_write) 
+                    data_string_for_hash += "".join(map(str, row_to_write))
             
-            # Sửa lại logic: Dữ liệu 'data' được truyền vào là dữ liệu gốc
-            # (không phải dữ liệu từ treeview)
+            # Sau khi ghi hết dữ liệu, tính hash
+            hasher = hashlib.sha256()
+            hasher.update(data_string_for_hash.encode('utf-8')) # Băm dưới dạng bytes
+            hash_value = hasher.hexdigest()
             
-            for index, row in enumerate(data, 1):
-                # row là (ID, Name) hoặc (ID, Name, Group)
-                sheet.append((index,) + row) 
+            # Ghi hash vào cuối file
+            sheet.append([]) # Thêm một dòng trống
+            sheet.append([self.lang("export_hash_label"), hash_value])
+            # --- KẾT THÚC THAY ĐỔI ---
                 
             workbook.save(filepath)
             messagebox.showinfo(self.lang("success_title"), self.lang("export_success_msg", filepath=filepath))
@@ -834,10 +887,8 @@ class LuckyDrawApp:
 
     def export_available_list(self):
         """Gọi hàm xuất cho danh sách chờ (sử dụng key prefix)"""
-        # --- THAY ĐỔI: Dữ liệu (self.available_employees) không có STT ---
         # Data là: (ID, Name)
         self.export_list(self.available_employees, "export_prefix_waiting")
-        # --- KẾT THÚC THAY ĐỔI ---
 
     def export_winners_list(self):
         """Gọi hàm xuất cho danh sách đã chọn (sử dụng key prefix)"""
@@ -855,4 +906,7 @@ if __name__ == "__main__":
     app = LuckyDrawApp(root)
     root.protocol("WM_DELETE_WINDOW", app.on_closing) 
     root.mainloop()
+
+
+
 
